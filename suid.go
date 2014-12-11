@@ -13,25 +13,25 @@ const (
 	MaxSeq        = 1<<seqBitCount - 1   //  63 bit(total) - 41 bit(ms) - 12 bit(appId) = 10
 )
 
-type suid struct {
+type SharedID struct {
 	appId     int64
 	seq       int
 	currentMs int64
 	sync.Mutex
 }
 
-func NewSUID(appId int) *suid {
+func NewSUID(appId int) *SharedID {
 	if appId > MaxAppId {
 		panic("App Id cannot be more than 4096")
 	}
 
-	return &suid{
+	return &SharedID{
 		appId: int64(appId) << appIdBitCount,
 		seq:   0,
 	}
 }
 
-func (s *suid) Generate() (int64, error) {
+func (s *SharedID) Generate() (int64, error) {
 	var id, ms int64
 	ms = time.Now().UnixNano() / 1e6
 	// ms goes to head
@@ -50,7 +50,7 @@ func (s *suid) Generate() (int64, error) {
 	return id, nil
 }
 
-func (s *suid) nextSeq(ms int64) (int64, error) {
+func (s *SharedID) nextSeq(ms int64) (int64, error) {
 	s.Lock()
 	defer s.Unlock()
 
