@@ -6,47 +6,28 @@ import (
 	"time"
 )
 
-const (
-	appIdBitCount = 12
-	seqBitCount   = 10
-	MaxAppId      = 1<<appIdBitCount - 1 //  63 bit(total) - 41 bit(ms) - 12 bit(appId) = 10
-	MaxSeq        = 1<<seqBitCount - 1   //  63 bit(total) - 41 bit(ms) - 12 bit(appId) = 10
-)
+const epoch = 1420000000000000000
 
 type SharedID struct {
-	appId     int64
-	seq       int
+	seq       int64
 	currentMs int64
 	sync.Mutex
 }
 
-func NewSUID(appId int) *SharedID {
-	if appId > MaxAppId {
-		panic("App Id cannot be more than 4096")
-	}
+func (s *SharedID) Generate(shardId int) (int64, error) {
+	ms := time.Now().Unix() * 1000
+	id := ms - epoch
+	id = id << 23
+	id = id | (int64(shardId) << 10)
 
-	return &SharedID{
-		appId: int64(appId) << appIdBitCount,
-		seq:   0,
-	}
-}
-
-func (s *SharedID) Generate() (int64, error) {
-	var id, ms int64
-	ms = time.Now().UnixNano() / 1e6
-	// ms goes to head
-	id = ms << 22 // 63 bit - 41 bit(ms)
-	// set appId into middle
-	id |= s.appId
-	// generate sequence
 	seq, err := s.nextSeq(ms)
 	if err != nil {
 		return int64(0), err
 	}
 
-	// generated sequence goes to the end
-	id |= seq
+	fmt.Println(seq)
 
+	id |= seq % 1024
 	return id, nil
 }
 
@@ -60,13 +41,15 @@ func (s *SharedID) nextSeq(ms int64) (int64, error) {
 
 	if s.currentMs < ms {
 		s.currentMs = ms
-		s.seq = -1
+	} else {
+		s.seq++
 	}
 
-	s.seq++
-	if s.seq > MaxSeq {
-		return int64(0), fmt.Errorf("you created more than %d ids in one milisecond", MaxSeq)
-	}
+	return s.seq, nil
+}
 
-	return int64(s.seq), nil
+var defaultGenerator = &SharedID{}
+
+func Generate(shardId int) (int64, error) {
+	return defaultGenerator.Generate(shardId)
 }
